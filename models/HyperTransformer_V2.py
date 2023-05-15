@@ -23,10 +23,6 @@ def conv3x3(in_channels, out_channels, stride=1):
     return nn.Conv2d(in_channels, out_channels, kernel_size=3, 
                      stride=stride, padding=1, bias=True)
 
-#######################################
-# Hyperspectral Transformer (HSIT) ####
-#######################################
-# Experimenting with soft attention
 class HyperTransformer(nn.Module):
     def __init__(self, config):
         super(HyperTransformer, self).__init__()
@@ -86,9 +82,6 @@ class HyperTransformer(nn.Module):
         
         self.SFE        = SFE(self.in_channels, self.num_res_blocks[0], self.n_feats, self.res_scale)
 
-        ###############
-        ### stage11 ###
-        ###############
         if config[config["train_dataset"]]["feature_sum"]:
             self.conv11_headSUM    = conv3x3(self.n_feats, self.n_feats)
         else:
@@ -103,9 +96,6 @@ class HyperTransformer(nn.Module):
                 res_scale=self.res_scale))
         self.conv11_tail = conv3x3(self.n_feats, self.n_feats)
 
-        ###############
-        ### stage22 ###
-        ###############
         if config[config["train_dataset"]]["feature_sum"]:
             self.conv22_headSUM = conv3x3(int(self.n_feats/2), int(self.n_feats/2))
         else:
@@ -118,9 +108,6 @@ class HyperTransformer(nn.Module):
             self.RB22.append(ResBlock(in_channels=int(self.n_feats/2), out_channels=int(self.n_feats/2), res_scale=self.res_scale))
         self.conv22_tail = conv3x3(int(self.n_feats/2), int(self.n_feats/2))
 
-        ###############
-        ### stage33 ###
-        ###############
         if config[config["train_dataset"]]["feature_sum"]:
              self.conv33_headSUM   = conv3x3(int(self.n_feats/4), int(self.n_feats/4))
         else:
@@ -130,31 +117,19 @@ class HyperTransformer(nn.Module):
             self.RB33.append(ResBlock(in_channels=int(self.n_feats/4), out_channels=int(self.n_feats/4), res_scale=self.res_scale))
         self.conv33_tail = conv3x3(int(self.n_feats/4), int(self.n_feats/4))
 
-        ##############
-        ### FINAL ####
-        ##############
         self.final_conv     = nn.Conv2d(in_channels=self.n_feats+int(self.n_feats/2)+int(self.n_feats/4), out_channels=self.out_channels, kernel_size=3, padding=1)
         self.RBF = nn.ModuleList()
         for i in range(self.num_res_blocks[4]):
             self.RBF.append(ResBlock(in_channels=self.out_channels, out_channels=self.out_channels, res_scale=self.res_scale))
         self.convF_tail = conv3x3(self.out_channels, self.out_channels)
 
-        ###############
-        # Batch Norm ##
-        ###############
         self.BN_x11 = nn.BatchNorm2d(self.n_feats)
         self.BN_x22 = nn.BatchNorm2d(int(self.n_feats/2))
         self.BN_x33 = nn.BatchNorm2d(int(self.n_feats/4))
 
-        ######################
-        # MUlti-Scale-Output #
-        ######################
         self.up_conv13 = nn.ConvTranspose2d(in_channels=self.n_feats, out_channels=self.in_channels, kernel_size=3, stride=4, output_padding=1)
         self.up_conv23 = nn.ConvTranspose2d(in_channels=int(self.n_feats/2), out_channels=self.in_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
 
-        ###########################
-        # Transfer Periferal Loss #
-        ###########################
         self.VGG_LFE_HSI    = VGG_LFE(in_channels=self.in_channels, requires_grad=False)
         self.VGG_LFE_PAN    = VGG_LFE(in_channels=1, requires_grad=False)
 
@@ -181,21 +156,9 @@ class HyperTransformer(nn.Module):
         T_lv2  = self.TS_lv2(V_lv2, K_lv2, Q_lv2)
         T_lv1  = self.TS_lv1(V_lv1, K_lv1, Q_lv1)
 
-        #Save feature maps for illustration purpose
-        # feature_dic={}
-        # feature_dic.update({"V": V_lv3.detach().cpu().numpy()})
-        # feature_dic.update({"K": K_lv3.detach().cpu().numpy()})
-        # feature_dic.update({"Q": Q_lv3.detach().cpu().numpy()})
-        # feature_dic.update({"T": T_lv3.detach().cpu().numpy()})
-        # savemat("/home/lidan/Dropbox/Hyperspectral/HyperTransformer/feature_visualization_pavia/soft_attention/multi_head_no_skip_lv3.mat", feature_dic)
-        # exit()
-
         #Shallow Feature Extraction (SFE)
         x = self.SFE(X_MS)
 
-        #####################################
-        #### stage1: (L/4, W/4) scale ######
-        #####################################
         x11 = x
         #HyperTransformer at (L/4, W/4) scale
         x11_res = x11
@@ -213,9 +176,6 @@ class HyperTransformer(nn.Module):
         x11_res = self.conv11_tail(x11_res)
         x11 = x11 + x11_res
 
-        #####################################
-        #### stage2: (L/2, W/2) scale ######
-        #####################################
         x22 = self.conv12(x11)
         x22 = F.relu(self.ps12(x22))
         #HyperTransformer at (L/2, W/2) scale
@@ -234,9 +194,6 @@ class HyperTransformer(nn.Module):
         x22_res = self.conv22_tail(x22_res)
         x22 = x22 + x22_res
 
-        #####################################
-        ###### stage3: (L, W) scale ########
-        #####################################
         x33 = self.conv23(x22)
         x33 = F.relu(self.ps23(x33))
         #HyperTransformer at (L, W) scale
@@ -255,16 +212,10 @@ class HyperTransformer(nn.Module):
         x33_res = self.conv33_tail(x33_res)
         x33 = x33 + x33_res
 
-        #####################################
-        ############ Feature Pyramid ########
-        #####################################
         x11_up  = F.interpolate(x11, scale_factor=4, mode='bicubic')
         x22_up  = F.interpolate(x22, scale_factor=2, mode='bicubic')
         xF      = torch.cat((x11_up, x22_up, x33), dim=1)
         
-        #####################################
-        ####  Final convolution   ###########
-        #####################################
         xF      = self.final_conv(xF)
         xF_res  = xF
 
@@ -274,23 +225,12 @@ class HyperTransformer(nn.Module):
         xF_res  = self.convF_tail(xF_res)
         x       = xF + xF_res
 
-        #####################################
-        #      Transfer Periferal Loss      #
-        #####################################
-        #v_vgg_lv1, v_vgg_lv2, v_vgg_lv3 = self.VGG_LFE_HSI(X_MS_UP)
-        #q_vgg_lv1, q_vgg_lv2, q_vgg_lv3 = self.VGG_LFE_PAN(X_PAN)
-        #loss_tp = LOSS_TP(V_lv1, v_vgg_lv1) + LOSS_TP(V_lv2, v_vgg_lv2) + LOSS_TP(V_lv3, v_vgg_lv3)
-        #loss_tp = loss_tp + LOSS_TP(Q_lv1, q_vgg_lv1) + LOSS_TP(Q_lv2, q_vgg_lv2) + LOSS_TP(Q_lv3, q_vgg_lv3)
-
         Phi_lv1, Phi_lv2, Phi_lv3   = self.LFE_HSI(x.detach())
         Phi_T_lv3  = self.TS_lv3(V_lv3, K_lv3, Phi_lv3)
         Phi_T_lv2  = self.TS_lv2(V_lv2, K_lv2, Phi_lv2)
         Phi_T_lv1  = self.TS_lv1(V_lv1, K_lv1, Phi_lv1)
         loss_tp                                 = LOSS_TP(Phi_T_lv1, T_lv1)+LOSS_TP(Phi_T_lv2, T_lv2)+LOSS_TP(Phi_T_lv3, T_lv3)
 
-        #####################################
-        #       Output                      #
-        #####################################
         x13 = self.up_conv13(x11)
         x23 = self.up_conv23(x22)
         output = {  "pred": x,
@@ -300,135 +240,6 @@ class HyperTransformer(nn.Module):
         return output
 
 
-#######################################
-# Hyperspectral Transformer (HSIT) ####
-#         Initial Training         ####
-#######################################
-# We pre-train this model first and then train the above model with pre-trained weights
-class HyperTransformerPre(nn.Module):
-    def __init__(self, config):
-        super(HyperTransformerPre, self).__init__()
-        self.is_DHP_MS      = config["is_DHP_MS"]
-        self.in_channels    = config[config["train_dataset"]]["spectral_bands"]
-        self.out_channels   = config[config["train_dataset"]]["spectral_bands"]
-        self.factor         = config[config["train_dataset"]]["factor"]
-
-        self.num_res_blocks = [16, 1, 1, 1, 4]
-        self.n_feats        = 256
-        self.res_scale      = 1
-
-        self.LFE_HSI    = LFE(in_channels=self.in_channels)
-        self.LFE_PAN    = LFE(in_channels=1)
-        # Scaled dot product attention
-        lv1_dim      = config[config["train_dataset"]]["LR_size"]**2
-        lv2_dim      = (2*config[config["train_dataset"]]["LR_size"])**2
-        lv3_dim      = (4*config[config["train_dataset"]]["LR_size"])**2
-        ### Scaled Dot Product Attention ###
-        self.TS_lv3     = ScaledDotProductAttentionOnly(temperature=lv1_dim)
-        self.TS_lv2     = ScaledDotProductAttentionOnly(temperature=lv2_dim)
-        self.TS_lv1     = ScaledDotProductAttentionOnly(temperature=lv3_dim)
-        self.SFE        = SFE(self.in_channels, self.num_res_blocks[0], self.n_feats, self.res_scale)
-
-        ###############
-        ### stage11 ###
-        ###############
-        self.conv11_head    = conv3x3(2*self.n_feats, self.n_feats)
-        self.conv12         = conv3x3(self.n_feats, self.n_feats*2)
-        self.ps12           = nn.PixelShuffle(2)
-
-        ###############
-        ### stage22 ###
-        ###############
-        self.conv22_head    = conv3x3(2*int(self.n_feats/2), int(self.n_feats/2))
-        self.conv23         = conv3x3(int(self.n_feats/2), self.n_feats)
-        self.ps23           = nn.PixelShuffle(2)
-
-        ###############
-        ### stage33 ###
-        ###############
-        self.conv33_head    = conv3x3(2*int(self.n_feats/4), int(self.n_feats/4))
-        
-
-        ##############
-        ### FINAL ####
-        ##############
-        self.final_conv     = nn.Conv2d(in_channels=self.n_feats+int(self.n_feats/2)+int(self.n_feats/4), out_channels=self.out_channels, kernel_size=3, padding=1)
-
-    def forward(self, X_MS, X_PAN):
-        with torch.no_grad():
-            if not self.is_DHP_MS:
-                X_MS_UP = F.interpolate(X_MS, scale_factor=(self.factor,self.factor),mode ='bicubic')
-
-            else:
-                X_MS_UP = X_MS
-            
-            # Generating PAN, and PAN (UD) images
-            X_PAN   = X_PAN.unsqueeze(dim=1)
-            PAN_D   = F.interpolate(X_PAN, scale_factor=(1/self.factor, 1/self.factor), mode ='bilinear')
-            PAN_UD  = F.interpolate(PAN_D, scale_factor=(self.factor, self.factor), mode ='bilinear')
-
-        #Extracting T and S at multiple-scales
-        #lv1 = LxW, lv2 = (L/2)x(w/2), lv3=(L/4, W/4)
-        V_lv1, V_lv2, V_lv3 = self.LFE_PAN(X_PAN)
-        K_lv1, K_lv2, K_lv3 = self.LFE_PAN(PAN_UD)
-        Q_lv1, Q_lv2, Q_lv3 = self.LFE_HSI(X_MS_UP)
-
-        T_lv3  = self.TS_lv3(V_lv3, K_lv3, Q_lv3)
-        T_lv2  = self.TS_lv2(V_lv2, K_lv2, Q_lv2)
-        T_lv1  = self.TS_lv1(V_lv1, K_lv1, Q_lv1)
-
-        #Shallow Feature Extraction (SFE)
-        x = self.SFE(X_MS)
-
-        #####################################
-        #### stage11: (L/4, W/4) scale ######
-        #####################################
-        x11 = x
-        #HyperTransformer at (L/4, W/4) scale
-        x11_res = x11
-        x11_res = torch.cat((x11_res, T_lv3), dim=1)
-        x11_res = self.conv11_head(x11_res) #F.relu(self.conv11_head(x11_res))
-        x11     = x11 + x11_res
-
-        #####################################
-        #### stage22: (L/2, W/2) scale ######
-        #####################################
-        x22 = self.conv12(x11)
-        x22 = F.relu(self.ps12(x22))
-        #HyperTransformer at (L/2, W/2) scale
-        x22_res = x22
-        x22_res = torch.cat((x22_res, T_lv2), dim=1)
-        x22_res = self.conv22_head(x22_res) #F.relu(self.conv22_head(x22_res))
-        x22     = x22 + x22_res
-
-        #####################################
-        ###### stage22: (L, W) scale ########
-        #####################################
-        x33 = self.conv23(x22)
-        x33 = F.relu(self.ps23(x33))
-        #HyperTransformer at (L, W) scale
-        x33_res = x33
-        x33_res = torch.cat((x33_res, T_lv1), dim=1)
-        x33_res = self.conv33_head(x33_res) #F.relu(self.conv33_head(x33_res))
-        x33     = x33 + x33_res
-
-        #####################################
-        ############ Feature Pyramid ########
-        #####################################
-        x11_up  = F.interpolate(x11, scale_factor=4, mode='bicubic')
-        x22_up  = F.interpolate(x22, scale_factor=2, mode='bicubic')
-        xF      = torch.cat((x11_up, x22_up, x33), dim=1)
-        
-        #####################################
-        ####  Final convolution   ###########
-        #####################################
-        x      = self.final_conv(xF)
-
-        #####################################
-        #      Output                       #
-        #####################################
-        output = {  "pred": x}
-        return output
 
 
 
