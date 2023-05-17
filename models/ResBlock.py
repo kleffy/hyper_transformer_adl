@@ -1,4 +1,4 @@
-from models.HyperTransformer_V2 import conv3x3
+from models.conv3x3 import conv3x3
 
 
 from torch import nn
