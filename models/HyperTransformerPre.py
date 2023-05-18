@@ -101,4 +101,5 @@ class HyperTransformerPre(nn.Module):
         x      = self.final_conv(xF)
 
         output = {  "pred": x}
+
         return output
