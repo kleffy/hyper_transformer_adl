@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 
 class SEBlock(nn.Module):
     def __init__(self, channel, reduction=16):
@@ -29,6 +30,11 @@ class DepthwiseSeparableConv(nn.Module):
         return out
 
 class LFE(nn.Module):
+    """
+    Now, the architecture includes group convolutions with increasing numbers of groups for each level, 
+    which may also help with model performance while controlling computational costs. This model 
+    design maintains a balance between performance improvement and computational efficiency.
+    """
     def __init__(self, in_channels):
         super(LFE, self).__init__()
         self.in_channels = in_channels
@@ -36,27 +42,26 @@ class LFE(nn.Module):
         # First level convolutions and SEBlock
         self.conv_64_1  = DepthwiseSeparableConv(in_channels=self.in_channels, out_channels=64, kernel_size=7, padding=3)
         self.bn_64_1    = nn.BatchNorm2d(64)
-        self.conv_64_2  = DepthwiseSeparableConv(in_channels=64, out_channels=64, kernel_size=3, padding=1)
+        self.conv_64_2  = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1, groups=2) # Grouped convolution
         self.bn_64_2    = nn.BatchNorm2d(64)
         self.se_block_64 = SEBlock(64)
 
         # Second level convolutions and SEBlock
         self.conv_128_1 = DepthwiseSeparableConv(in_channels=64, out_channels=128, kernel_size=3, padding=1)
         self.bn_128_1   = nn.BatchNorm2d(128)
-        self.conv_128_2 = DepthwiseSeparableConv(in_channels=128, out_channels=128, kernel_size=3, padding=1)
+        self.conv_128_2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1, groups=4) # Grouped convolution
         self.bn_128_2   = nn.BatchNorm2d(128)
         self.se_block_128 = SEBlock(128)
 
         # Third level convolutions and SEBlock
         self.conv_256_1 = DepthwiseSeparableConv(in_channels=128, out_channels=256, kernel_size=3, padding=1)
         self.bn_256_1   = nn.BatchNorm2d(256)
-        self.conv_256_2 = DepthwiseSeparableConv(in_channels=256, out_channels=256, kernel_size=3, padding=1)
+        self.conv_256_2 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1, groups=8) # Grouped convolution
         self.bn_256_2   = nn.BatchNorm2d(256)
         self.se_block_256 = SEBlock(256)
 
         self.MaxPool2x2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.LeakyReLU  = nn.LeakyReLU(negative_slope=0.0)
-
 
     def forward(self, x):
         # First level outputs
@@ -70,11 +75,16 @@ class LFE(nn.Module):
         out2 = self.bn_128_2(self.conv_128_2(out2))
         out2 = self.se_block_128(out2)
 
+        # Adding skip connection from the first level
+        # out2 = out2 + out1_mp
+
         # Third level outputs
         out2_mp = self.MaxPool2x2(self.LeakyReLU(out2))
         out3 = self.LeakyReLU(self.bn_256_1(self.conv_256_1(out2_mp)))
         out3 = self.bn_256_2(self.conv_256_2(out3))
         out3 = self.se_block_256(out3)
 
-        return out1, out2, out3
+        # Adding skip connection from the second level
+        # out3 = out3 + out2_mp
 
+        return out1, out2, out3
