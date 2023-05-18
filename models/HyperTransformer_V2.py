@@ -10,18 +10,11 @@ from models.ResBlock import ResBlock
 from models.SFE import SFE
 from models.ScaledDotProductAttentionOnly import ScaledDotProductAttentionOnly
 from models.VGG_LFE import VGG_LFE
+from models.conv3x3 import conv3x3
 
 LOSS_TP = nn.L1Loss()
 
 EPS = 1e-10
-
-def conv1x1(in_channels, out_channels, stride=1):
-    return nn.Conv2d(in_channels, out_channels, kernel_size=1,
-                     stride=stride, padding=0, bias=True)
-
-def conv3x3(in_channels, out_channels, stride=1):
-    return nn.Conv2d(in_channels, out_channels, kernel_size=3, 
-                     stride=stride, padding=1, bias=True)
 
 class HyperTransformer(nn.Module):
     def __init__(self, config):
@@ -238,8 +231,3 @@ class HyperTransformer(nn.Module):
                     "x23": x23,
                     "tp_loss": loss_tp}
         return output
-
-
-
-
-

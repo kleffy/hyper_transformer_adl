@@ -1,10 +1,12 @@
-from dataloaders.EnMAP_dataset_gdal import enmap_dataset
+from dataloaders.EnMAP_dataset_lmdb import enmap_dataset
 
 import os
 import argparse
 import json
 import torch
 # import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
 from torch.nn.functional import threshold, unfold
 from dataloaders.HSI_datasets import *
 from utils.logger import Logger
@@ -14,7 +16,8 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
-from models.models import MODELS
+# from models.models import MODELS
+from models.models_V2 import MODELS
 from utils.metrics import *
 import shutil
 import torchvision
@@ -31,7 +34,7 @@ from utils.spatial_loss import Spatial_Loss
 
 
 # num_channels = 224
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_PRE_1.json'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_PRE_6.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
 # config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_t.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/ENMAP_FT_HYPER_efficientnetv2_rw_t.pth'
@@ -42,6 +45,11 @@ def ensure_dir(file_path):
 
     if not os.path.exists(directory):
         os.makedirs(directory)
+    
+def read_csv_keys(csv_file, csv_file_col_name):
+    df = pd.read_csv(csv_file)
+    keys = df[csv_file_col_name].tolist()
+    return keys
 
 __dataset__ = {
     "pavia_dataset": pavia_dataset, 
@@ -86,7 +94,45 @@ else:
 
 # Setting up training and testing dataloaderes.
 print("Training with dataset => {}".format(config["train_dataset"]))
-train_loader = data.DataLoader(
+if config["train_dataset"] == 'enmap_dataset':
+    keys = read_csv_keys(
+                        os.path.join(config["enmap_dataset"]["lmdb_save_dir"], 
+                                        config["enmap_dataset"]["csv_file_name"]), 
+                        config["enmap_dataset"]["columns"][0])
+
+    train_keys, val_keys = train_test_split(
+                                            keys, 
+                                            test_size=config["enmap_dataset"]["val_split"], 
+                                            random_state=42, shuffle=False)
+
+    print(f"Number of train set: {len(train_keys)} && Number of validation set: {len(val_keys)}")
+    train_loader = data.DataLoader(
+                            __dataset__[config["train_dataset"]](
+                                config,
+                                train_keys,
+                                is_train=True,
+                                want_DHP_MS_HR=config["is_DHP_MS"],
+                            ),
+                            batch_size=config["train_batch_size"],
+                            num_workers=config["num_workers"],
+                            shuffle=True,
+                            pin_memory=False,
+                        )
+
+    test_loader = data.DataLoader(
+                            __dataset__[config["train_dataset"]](
+                                config,
+                                val_keys,
+                                is_train=False,
+                                want_DHP_MS_HR=config["is_DHP_MS"],
+                            ),
+                            batch_size=config["val_batch_size"],
+                            num_workers=config["num_workers"],
+                            shuffle=True,
+                            pin_memory=False,
+                        )
+else:
+    train_loader = data.DataLoader(
                         __dataset__[config["train_dataset"]](
                             config,
                             is_train=True,
@@ -98,17 +144,18 @@ train_loader = data.DataLoader(
                         pin_memory=False,
                     )
 
-test_loader = data.DataLoader(
-                        __dataset__[config["train_dataset"]](
-                            config,
-                            is_train=False,
-                            want_DHP_MS_HR=config["is_DHP_MS"],
-                        ),
-                        batch_size=config["val_batch_size"],
-                        num_workers=config["num_workers"],
-                        shuffle=True,
-                        pin_memory=False,
-                    )
+    test_loader = data.DataLoader(
+                            __dataset__[config["train_dataset"]](
+                                config,
+                                is_train=False,
+                                want_DHP_MS_HR=config["is_DHP_MS"],
+                            ),
+                            batch_size=config["val_batch_size"],
+                            num_workers=config["num_workers"],
+                            shuffle=True,
+                            pin_memory=False,
+                        )
+
 
 # Initialization of hyperparameters. 
 start_epoch = 1

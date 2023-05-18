@@ -1,4 +1,5 @@
-from models.HyperTransformer_V2 import conv1x1, conv3x3
+from model.conv3x3 import conv3x3
+from model.conv1x1 import conv1x1
 
 
 import torch

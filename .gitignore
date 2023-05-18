@@ -13,6 +13,7 @@ logs/
 configs/
 ht_pretrained/
 img_pred/
+models/test.py
 
 ### Data ###
 *.csv
