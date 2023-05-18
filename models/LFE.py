@@ -31,8 +31,7 @@ class DepthwiseSeparableConv(nn.Module):
 
 class LFE(nn.Module):
     """
-    Now, the architecture includes the skip connections between the outputs of the max pooling layers and the next level of output. 
-    In addition, I've added group convolutions with increasing numbers of groups for each level, 
+    Now, the architecture includes group convolutions with increasing numbers of groups for each level, 
     which may also help with model performance while controlling computational costs. This model 
     design maintains a balance between performance improvement and computational efficiency.
     """

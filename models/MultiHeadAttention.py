@@ -1,77 +1,70 @@
+import torch
+from torch import nn
 from models.ScaledDotProductAttention import ScaledDotProductAttention
 
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * x.sigmoid()
 
-from torch import nn
+class LayerNorm(nn.Module):
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.gamma = nn.Parameter(torch.ones(features))
+        self.beta = nn.Parameter(torch.zeros(features))
+        self.eps = eps
 
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 class MultiHeadAttention(nn.Module):
-    ''' Multi-Head Attention module for Hyperspectral Pansharpening (Image Fusion) '''
-
     def __init__(self, n_head, in_pixels, linear_dim, num_features):
         super().__init__()
-        #Parameters
-        self.n_head         = n_head        #No of heads
-        self.in_pixels      = in_pixels     #No of pixels in the input image
-        self.linear_dim     = linear_dim    #Dim of linear-layer (outputs)
 
-        #Linear layers
+        self.n_head = n_head
+        self.linear_dim = linear_dim
 
-        self.w_qs   = nn.Linear(in_pixels, n_head * linear_dim, bias=False) #Linear layer for queries
-        self.w_ks   = nn.Linear(in_pixels, n_head * linear_dim, bias=False) #Linear layer for keys
-        self.w_vs   = nn.Linear(in_pixels, n_head * linear_dim, bias=False) #Linear layer for values
-        self.fc     = nn.Linear(n_head * linear_dim, in_pixels, bias=False) #Final fully connected layer
+        self.w_qs = nn.Linear(in_pixels, n_head * linear_dim, bias=False)
+        self.w_ks = nn.Linear(in_pixels, n_head * linear_dim, bias=False)
+        self.w_vs = nn.Linear(in_pixels, n_head * linear_dim, bias=False)
+        self.fc = nn.Linear(n_head * linear_dim, in_pixels, bias=False)
 
-        #Scaled dot product attention
-        self.attention = ScaledDotProductAttention(temperature=in_pixels ** 0.5)
+        self.attention = ScaledDotProductAttention()
+        self.temperature = nn.Parameter(torch.sqrt(torch.FloatTensor([in_pixels])), requires_grad=True)
 
-        #Batch normalization layer
         self.OutBN = nn.BatchNorm2d(num_features=num_features)
+        self.layer_norm = LayerNorm(n_head * linear_dim)
+        self.activation = Swish()
 
     def forward(self, v, k, q, mask=None):
-        # Reshaping matrixes to 2D
-        # q = b, c_q, h*w
-        # k = b, c_k, h*w
-        # v = b, c_v, h*w
-        b, c, h, w      = q.size(0), q.size(1), q.size(2), q.size(3)
-        n_head          = self.n_head
-        linear_dim      = self.linear_dim
+        b, c, h, w = q.size(0), q.size(1), q.size(2), q.size(3)
+        n_head = self.n_head
+        linear_dim = self.linear_dim
 
-        # Reshaping K, Q, and Vs...
         q = q.view(b, c, h*w)
         k = k.view(b, c, h*w)
         v = v.view(b, c, h*w)
 
-        #Save V
         output = v
 
-        # Pass through the pre-attention projection: b x lq x (n*dv)
-        # Separate different heads: b x lq x n x dv
         q = self.w_qs(q).view(b, c, n_head, linear_dim)
         k = self.w_ks(k).view(b, c, n_head, linear_dim)
         v = self.w_vs(v).view(b, c, n_head, linear_dim)
 
-        # Transpose for attention dot product: b x n x lq x dv
         q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
 
         if mask is not None:
-            mask = mask.unsqueeze(1)   # For head axis broadcasting.
+            mask = mask.unsqueeze(1)
 
-        # Computing ScaledDotProduct attention for each head
-        v_attn = self.attention(v, k, q, mask=mask)
+        v_attn = self.attention(v, k, q, mask=mask, temperature=self.temperature)
 
-        # Transpose to move the head dimension back: b x lq x n x dv
-        # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
         v_attn = v_attn.transpose(1, 2).contiguous().view(b, c, n_head * linear_dim)
-        v_attn = self.fc(v_attn)
-
+        v_attn = self.fc(self.layer_norm(self.activation(v_attn)))
 
         output = output + v_attn
-        #output  = v_attn
 
-        #Reshape output to original image format
         output = output.view(b, c, h, w)
-
-        #We can consider batch-normalization here,,,
-        #Will complete it later
         output = self.OutBN(output)
+
         return output
