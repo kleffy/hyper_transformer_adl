@@ -102,3 +102,4 @@ class HyperTransformerPre(nn.Module):
 
         output = {  "pred": x}
         return output
+      
