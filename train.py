@@ -34,7 +34,7 @@ from utils.spatial_loss import Spatial_Loss
 
 
 # num_channels = 224
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_PRE_6.json'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_pavia_PRE_2.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
 # config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_t.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/ENMAP_FT_HYPER_efficientnetv2_rw_t.pth'
@@ -438,9 +438,19 @@ with open(PATH+"/"+"model_summary.txt", 'w+') as f:
     print(f'\n{model}\n')
     sys.stdout = original_stdout 
 
+
 # Main loop.
 best_psnr   =0.0
 print(config["cfg_suffix"])
+best_model_checkpoint = os.path.join(PATH, "best_model.pth")
+
+if os.path.exists(best_model_checkpoint):
+    checkpoint = torch.load(best_model_checkpoint)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    start_epoch = checkpoint['epoch'] + 1
+    print(f"Loaded model checkpoint from {best_model_checkpoint}")
+    print(f'starting from epoch {start_epoch}')
+
 for epoch in range(start_epoch, total_epochs):
     print("\nTraining Epoch: %d" % epoch)
     train(epoch)
@@ -449,16 +459,15 @@ for epoch in range(start_epoch, total_epochs):
         print("\nTesting Epoch: %d" % epoch)
         image_dict, pred_dic, metrics=test(epoch)
         
-        #Saving the best model
         if metrics["psnr"] > best_psnr:
             best_psnr = metrics["psnr"]
             
-            #Saving best performance metrics
-            torch.save(model.state_dict(), PATH+"/"+"best_model.pth")
+            
+            torch.save({'epoch': epoch,'model_state_dict': model.state_dict()}, best_model_checkpoint)
+
             with open(PATH+"/"+"best_metrics.json", "w+") as outfile: 
                 json.dump(metrics, outfile)
 
-            #Saving best prediction
             savemat(PATH+"/"+ "final_prediction.mat", pred_dic)
 
     scheduler.step()
