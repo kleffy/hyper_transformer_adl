@@ -231,8 +231,3 @@ class HyperTransformer(nn.Module):
                     "x23": x23,
                     "tp_loss": loss_tp}
         return output
-
-
-
-
-
