@@ -35,8 +35,8 @@ from models.hyperkon_2D_3D import HyperKon_2D_3D
 
 
 # num_channels = 102
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_11.json'
-best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_chikusei_ft_vgg_2.json'
+best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/Experiments/HSIT/head/chikusei_dataset/CHIKUSEI_PRE_Head_V4/best_model.pth'
 
 def ensure_dir(file_path):
     directory = os.path.dirname(file_path)
@@ -271,7 +271,7 @@ def train(epoch):
             target_HYP   = to_variable(reference)
             # print(f'model_name: {model_name}')
             if config["backbone"].get("resnext") == 0:
-                # print("Initialised ResNext101!")
+                # print("Initialised SqueezeExcitation!")
                 perceptual_model =  SqueezeExcitation(in_channels, out_features)
             elif config["backbone"].get("resnext") == 101:
                 # print("Initialised ResNext101!")
