@@ -35,8 +35,8 @@ from models.hyperkon_2D_3D import HyperKon_2D_3D
 
 
 # num_channels = 102
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_chikusei_ft_vgg_2.json'
-best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/Experiments/HSIT/head/chikusei_dataset/CHIKUSEI_PRE_Head_V4/best_model.pth'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_pavia_ft_vgg_8.json'
+best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/Experiments/HSIT/head/pavia_dataset/PAVIA_PRE_Head_V4_2/best_model.pth'
 
 def ensure_dir(file_path):
     directory = os.path.dirname(file_path)
@@ -303,7 +303,7 @@ def train(epoch):
         if config[config["train_dataset"]]["multi_scale_loss"]:
             loss += config[config["train_dataset"]]["multi_scale_loss_F"]*criterion(to_variable(reference), out["x13"]) + 2*config[config["train_dataset"]]["multi_scale_loss_F"]*criterion(to_variable(reference), out["x23"])
 
-        print(f'Train Loss: {loss}')
+        # print(f'Train Loss: {loss}')
         torch.autograd.backward(loss)
         # loss.backward()
 
