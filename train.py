@@ -94,7 +94,7 @@ else:
 
 # Setting up training and testing dataloaderes.
 print("Training with dataset => {}".format(config["train_dataset"]))
-if config["train_dataset"] == 'enmap_dataset':
+if config["train_dataset"] == 'enmap_dataset' and config[config["train_dataset"]]["HVGG_Loss"]:
     keys = read_csv_keys(
                         os.path.join(config["enmap_dataset"]["lmdb_save_dir"], 
                                         config["enmap_dataset"]["csv_file_name"]), 
