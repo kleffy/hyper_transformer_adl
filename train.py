@@ -1,4 +1,4 @@
-from dataloaders.EnMAP_dataset_lmdb import enmap_dataset
+from dataloaders.EnMAP_dataset import enmap_dataset
 
 import os
 import argparse
@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 # from models.models import MODELS
-from models.models_V2 import MODELS
+from models.models import MODELS
 from utils.metrics import *
 import shutil
 import torchvision
@@ -34,7 +34,7 @@ from utils.spatial_loss import Spatial_Loss
 
 
 # num_channels = 224
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_pavia_PRE_3.json'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_pre_t.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
 # config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_t.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/ENMAP_FT_HYPER_efficientnetv2_rw_t.pth'
@@ -94,7 +94,7 @@ else:
 
 # Setting up training and testing dataloaderes.
 print("Training with dataset => {}".format(config["train_dataset"]))
-if config["train_dataset"] == 'enmap_dataset' and config[config["train_dataset"]]["HVGG_Loss"]:
+if config["train_dataset"] == 'enmap_dataset' and config[config["train_dataset"]].get("use_lmdb"):
     keys = read_csv_keys(
                         os.path.join(config["enmap_dataset"]["lmdb_save_dir"], 
                                         config["enmap_dataset"]["csv_file_name"]), 
@@ -186,6 +186,7 @@ scheduler = optim.lr_scheduler.StepLR(  optimizer,
 # Resume...
 if args.resume is not None:
     print("Loading from existing FCN and copying weights to continue....")
+    print(f"Loading from {args.resume}")
     checkpoint = torch.load(args.resume)
     # model = torch.nn.DataParallel(model).cuda()
     model.load_state_dict(checkpoint, strict=False)
@@ -376,8 +377,6 @@ def test(epoch):
     writer.add_scalar('Test_Metrics/ERGAS', ergas, epoch)
     writer.add_scalar('Test_Metrics/PSNR', psnr, epoch)
 
-    # Images to tensorboard
-    # Regenerating the final image
     if config["trainer"]["is_small_patch_train"]:
         outputs = outputs.view(unfold_shape).permute(0, 1, 4, 2, 5, 3, 6).contiguous()
         outputs = outputs.contiguous().view(config["val_batch_size"], 
@@ -391,29 +390,32 @@ def test(epoch):
                                                 config[config["train_dataset"]]["HR_size"])
         MS_image = MS_image.view(unfold_shape).permute(0, 1, 4, 2, 5, 3, 6).contiguous()
         MS_image = MS_image.contiguous().view(config["val_batch_size"], 
-                                                config[config["train_dataset"]]["spectral_bands"],
-                                                config[config["train_dataset"]]["HR_size"],
-                                                config[config["train_dataset"]]["HR_size"])
-    # if (epoch + 1) % 10 == 0:
-    #Normalizing the images
+                                              config[config["train_dataset"]]["spectral_bands"],
+                                              config[config["train_dataset"]]["HR_size"],
+                                              config[config["train_dataset"]]["HR_size"])
+
     outputs     = outputs/torch.max(reference)
     reference   = reference/torch.max(reference)
     MS_image    = MS_image/torch.max(reference)
+
     if config["model"]=="HyperPNN" or config["is_DHP_MS"]==False:
         MS_image =  F.interpolate(MS_image, scale_factor=(config[config["train_dataset"]]["factor"],config[config["train_dataset"]]["factor"]),mode ='bilinear')
-    
-    ms      = torch.unsqueeze(MS_image.view(-1, MS_image.shape[-2], MS_image.shape[-1]), 1)
-    pred    = torch.unsqueeze(outputs.view(-1, outputs.shape[-2], outputs.shape[-1]), 1)
-    ref     = torch.unsqueeze(reference.view(-1, reference.shape[-2], reference.shape[-1]), 1)
-    imgs    = torch.zeros(5*pred.shape[0], pred.shape[1], pred.shape[2], pred.shape[3])
+
+    r, g, b = config[config["train_dataset"]]["R"], config[config["train_dataset"]]["G"], config[config["train_dataset"]]["B"]
+    ms      = MS_image[:, [r, g, b], :, :]
+    pred    = outputs[:, [r, g, b], :, :]
+    ref     = reference[:, [r, g, b], :, :]
+
+    imgs    = torch.zeros(5*pred.shape[0], 3, pred.shape[2], pred.shape[3])
     for i in range(pred.shape[0]):
         imgs[5*i]   = ms[i]
         imgs[5*i+1] = torch.abs(ms[i]-pred[i])/torch.max(torch.abs(ms[i]-pred[i]))
         imgs[5*i+2] = pred[i]
         imgs[5*i+3] = ref[i]
         imgs[5*i+4] = torch.abs(ref[i]-pred[i])/torch.max(torch.abs(ref[i]-pred[i]))
+
     imgs = torchvision.utils.make_grid(imgs, nrow=5)
-    writer.add_image('Images', imgs[:,:2562,:], epoch+1)
+    writer.add_image('Images', imgs[:,:,:], epoch+1)
 
     #Return Outputs
     metrics = { "loss": float(test_loss), 

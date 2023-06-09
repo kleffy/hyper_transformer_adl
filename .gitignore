@@ -211,3 +211,5 @@ cython_debug/
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/data,python,visualstudiocode
+train_3d_hpl2.py
+utils/hyper_perceptual_loss2.py

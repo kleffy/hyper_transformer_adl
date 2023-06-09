@@ -16,6 +16,7 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
+# from models.models import MODELS
 from models.models_V2 import MODELS
 from utils.metrics import *
 import shutil
@@ -27,17 +28,17 @@ import sys
 from scipy.io import savemat
 import torch.nn.functional as F
 from utils.vgg_perceptual_loss import VGGPerceptualLoss, VGG19
-from utils.hyper_perceptual_loss import HyperPerceptualLoss as HyperPerceptualLossProj
-from utils.hyper_perceptual_loss2 import HyperPerceptualLoss
+from utils.hyper_perceptual_loss import HyperPerceptualLoss
 from utils.spatial_loss import Spatial_Loss
-from models.resnext import resnext50, resnext101, resnext152
-from models.squeeze_excitation import SqueezeExcitation
-from models.hyperkon_2D_3D import HyperKon_2D_3D
 
 
-# num_channels = 102
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_14.json'
-best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/Experiments/HSIT/head/enmap_dataset/ENMAP_PRE_N10_Head_V4/best_model.pth'
+
+# num_channels = 224
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_pavia_pre_2.json'
+# best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
+# config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_t.json'
+# best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/ENMAP_FT_HYPER_efficientnetv2_rw_t.pth'
+best_pre_model_path = None
 
 def ensure_dir(file_path):
     directory = os.path.dirname(file_path)
@@ -72,7 +73,7 @@ args = parser.parse_args()
 # Loading the config file
 config = json.load(open(args.config))
 torch.backends.cudnn.benchmark = True
-# breakpoint()
+
 # Set seeds.
 torch.manual_seed(7)
 
@@ -93,7 +94,7 @@ else:
 
 # Setting up training and testing dataloaderes.
 print("Training with dataset => {}".format(config["train_dataset"]))
-if config["train_dataset"] == 'enmap_dataset' and config[config["train_dataset"]]["use_lmdb"]:
+if config["train_dataset"] == 'enmap_dataset' and config[config["train_dataset"]].get("use_lmdb"):
     keys = read_csv_keys(
                         os.path.join(config["enmap_dataset"]["lmdb_save_dir"], 
                                         config["enmap_dataset"]["csv_file_name"]), 
@@ -155,6 +156,7 @@ else:
                             pin_memory=False,
                         )
 
+
 # Initialization of hyperparameters. 
 start_epoch = 1
 total_epochs = config["trainer"]["total_epochs"]
@@ -211,7 +213,6 @@ if config[config["train_dataset"]]["Spatial_Loss"]:
 
 # Training epoch.
 def train(epoch):
-    
     train_loss = 0.0
     model.train()
     optimizer.zero_grad()
@@ -261,42 +262,19 @@ def train(epoch):
             out_features = config["backbone"]["out_features"] 
             normalize = config["backbone"]["normalize"]
             saved_model_path = config["backbone"]["saved_model_path"]
-
-            if config["train_dataset"] == 'enmap_dataset':
-                mean_file = config["enmap_dataset"]["l1_mean_file"] # l2_mean_file l1_mean_file
-                std_file = config["enmap_dataset"]["l1_std_file"] # l2_std_file l1_std_file
-            else:
-                mean_file = None
-                std_file = None
+            mean_file = config["enmap_dataset"]["l1_mean_file"] # l2_mean_file l1_mean_file
+            std_file = config["enmap_dataset"]["l1_std_file"] # l2_std_file l1_std_file
             
             predicted_HYP   = outputs
             target_HYP   = to_variable(reference)
-            # print(f'model_name: {model_name}')
-            if config["backbone"].get("resnext") == 0:
-                # print("Initialised SqueezeExcitation!")
-                perceptual_model =  SqueezeExcitation(in_channels, out_features)
-            elif config["backbone"].get("resnext") == 101:
-                # print("Initialised ResNext101!")
-                perceptual_model = resnext101(in_channels=in_channels, out_features=out_features)
-            elif config["backbone"].get("resnext") == 152:
-                # print("Initialised ResNext152!")
-                perceptual_model = resnext152(in_channels=in_channels, out_features=out_features)
-            else:
-                # print("Initialised ResNext50!")
-                perceptual_model = resnext50(in_channels=in_channels, out_features=out_features)
             
-            if config["backbone"].get("use_projection_head"):
-                hyper_criterion  = HyperPerceptualLossProj(model_name=model_name, pretrained=pretrained, in_channels=in_channels,
+            hyper_criterion  = HyperPerceptualLoss(model_name=model_name, pretrained=pretrained, in_channels=in_channels,
                                                    out_features=out_features, saved_model_path=saved_model_path, 
-                                                   mean_file=mean_file, std_file=std_file, normalize=normalize, perceptual_model=perceptual_model)
-            else:
-                hyper_criterion  = HyperPerceptualLoss(model_name=model_name, pretrained=pretrained, in_channels=in_channels,
-                                                   out_features=out_features, saved_model_path=saved_model_path, 
-                                                   mean_file=mean_file, std_file=std_file, normalize=normalize, perceptual_model=perceptual_model)
+                                                   mean_file=mean_file, std_file=std_file, normalize=normalize)
             
             hyper_loss        = hyper_criterion(predicted_HYP, target_HYP)
             loss            += config[config["train_dataset"]]["HVGG_Loss_F"]*hyper_loss
-            # print(f'Hyper Loss: {hyper_loss}')
+            print(f'Hyper Loss: {hyper_loss}')
 
         # Transfer Perceptual Loss
         if config[config["train_dataset"]]["Transfer_Periferal_Loss"]:
@@ -310,7 +288,7 @@ def train(epoch):
         if config[config["train_dataset"]]["multi_scale_loss"]:
             loss += config[config["train_dataset"]]["multi_scale_loss_F"]*criterion(to_variable(reference), out["x13"]) + 2*config[config["train_dataset"]]["multi_scale_loss_F"]*criterion(to_variable(reference), out["x23"])
 
-        print(f'Train Loss: {loss}')
+        # print(f'Loss: {loss}')
         torch.autograd.backward(loss)
         # loss.backward()
 
@@ -319,6 +297,12 @@ def train(epoch):
             optimizer.zero_grad()
 
     writer.add_scalar('Loss/train', loss, epoch)
+
+    # if config[config["train_dataset"]]["VGG_Loss"]:
+    #     writer.add_scalar('VGG Loss/train', VGG_loss, epoch)
+
+    # if config[config["train_dataset"]]["HVGG_Loss"]:
+    #     writer.add_scalar('Hyperspectral Loss/train', hyper_loss, epoch)
 
     
 # Testing epoch.
@@ -360,9 +344,7 @@ def test(epoch):
             outputs[outputs<0]      = 0.0
             outputs[outputs>1.0]    = 1.0
             outputs                 = torch.round(outputs*config[config["train_dataset"]]["max_value"])
-            pred_img_name = image_dict["imgs"][0].split("/")[-1][:-4].replace('-____', '_').replace('-', '_')
-            # print(f"Predicted img name: {pred_img_name}")
-            img_dict = {pred_img_name+"_pred": torch.squeeze(outputs).permute(1,2,0).cpu().numpy()}
+            img_dict = {image_dict["imgs"][0].split("/")[-1][:-4]+"_pred": torch.squeeze(outputs).permute(1,2,0).cpu().numpy()}
             pred_dic.update(img_dict)
             reference               = torch.round(reference.detach()*config[config["train_dataset"]]["max_value"])
 
@@ -460,6 +442,7 @@ with open(PATH+"/"+"model_summary.txt", 'w+') as f:
     sys.stdout = f
     print(f'\n{model}\n')
     sys.stdout = original_stdout 
+
 
 # Main loop.
 best_psnr   =0.0

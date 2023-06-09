@@ -400,22 +400,25 @@ def test(epoch):
     outputs     = outputs/torch.max(reference)
     reference   = reference/torch.max(reference)
     MS_image    = MS_image/torch.max(reference)
+
     if config["model"]=="HyperPNN" or config["is_DHP_MS"]==False:
         MS_image =  F.interpolate(MS_image, scale_factor=(config[config["train_dataset"]]["factor"],config[config["train_dataset"]]["factor"]),mode ='bilinear')
-    
-    ms      = torch.unsqueeze(MS_image.view(-1, MS_image.shape[-2], MS_image.shape[-1]), 1)
-    pred    = torch.unsqueeze(outputs.view(-1, outputs.shape[-2], outputs.shape[-1]), 1)
-    ref     = torch.unsqueeze(reference.view(-1, reference.shape[-2], reference.shape[-1]), 1)
-    imgs    = torch.zeros(5*pred.shape[0], pred.shape[1], pred.shape[2], pred.shape[3])
+
+    r, g, b = config[config["train_dataset"]]["R"], config[config["train_dataset"]]["G"], config[config["train_dataset"]]["B"]
+    ms      = MS_image[:, [r, g, b], :, :]
+    pred    = outputs[:, [r, g, b], :, :]
+    ref     = reference[:, [r, g, b], :, :]
+
+    imgs    = torch.zeros(5*pred.shape[0], 3, pred.shape[2], pred.shape[3])
     for i in range(pred.shape[0]):
         imgs[5*i]   = ms[i]
         imgs[5*i+1] = torch.abs(ms[i]-pred[i])/torch.max(torch.abs(ms[i]-pred[i]))
         imgs[5*i+2] = pred[i]
         imgs[5*i+3] = ref[i]
         imgs[5*i+4] = torch.abs(ref[i]-pred[i])/torch.max(torch.abs(ref[i]-pred[i]))
-        # TODO: Add difference between Ref & MSI
+
     imgs = torchvision.utils.make_grid(imgs, nrow=5)
-    writer.add_image('Images', imgs[:,:2401,:], epoch+1)
+    writer.add_image('Images', imgs[:,:,:], epoch+1)
 
     #Return Outputs
     metrics = { "loss": float(test_loss), 

@@ -30,8 +30,7 @@ class MultiHeadAttention(nn.Module):
         self.w_vs = nn.Linear(in_pixels, n_head * linear_dim, bias=False)
         self.fc = nn.Linear(n_head * linear_dim, in_pixels, bias=False)
 
-        self.attention = ScaledDotProductAttention()
-        self.temperature = nn.Parameter(torch.sqrt(torch.FloatTensor([in_pixels])), requires_grad=True)
+        self.attention = ScaledDotProductAttention(temperature_init_value=in_pixels ** 0.5)
 
         self.OutBN = nn.BatchNorm2d(num_features=num_features)
         self.layer_norm = LayerNorm(n_head * linear_dim)
@@ -57,7 +56,7 @@ class MultiHeadAttention(nn.Module):
         if mask is not None:
             mask = mask.unsqueeze(1)
 
-        v_attn = self.attention(v, k, q, mask=mask, temperature=self.temperature)
+        v_attn = self.attention(v, k, q, mask=mask)
 
         v_attn = v_attn.transpose(1, 2).contiguous().view(b, c, n_head * linear_dim)
         v_attn = self.fc(self.layer_norm(self.activation(v_attn)))
