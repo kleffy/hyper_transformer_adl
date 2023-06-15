@@ -34,7 +34,7 @@ from utils.spatial_loss import Spatial_Loss
 
 
 # num_channels = 224
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_pre_t.json'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/botswana/config_HSIT_botswana_pre_1_1.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
 # config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_t.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/ENMAP_FT_HYPER_efficientnetv2_rw_t.pth'

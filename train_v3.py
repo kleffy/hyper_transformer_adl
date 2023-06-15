@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 # from models.models import MODELS
-from models.models_V2 import MODELS
+from models.models_V3 import MODELS
 from utils.metrics import *
 import shutil
 import torchvision
@@ -34,7 +34,7 @@ from utils.spatial_loss import Spatial_Loss
 
 
 # num_channels = 224
-config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/botswana/config_HSIT_botswana_pre_2_1.json'
+config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/botswana/config_HSIT_botswana_pre_3_1.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/enmap_pre_best_model.pth'
 # config_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/configs/config_HSIT_enmap_ft_hyper_t.json'
 # best_pre_model_path = r'/vol/research/RobotFarming/Projects/hyper_transformer/bst_model/ENMAP_FT_HYPER_efficientnetv2_rw_t.pth'
