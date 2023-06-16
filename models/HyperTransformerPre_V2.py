@@ -1,5 +1,5 @@
 from models.conv3x3 import conv3x3
-from models.LFE_v2 import LFE
+from models.LFE_v3 import LFE
 from models.SFE import SFE
 from models.ScaledDotProductAttentionOnly import ScaledDotProductAttentionOnly
 

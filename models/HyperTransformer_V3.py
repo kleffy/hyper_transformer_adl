@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import nn
 from scipy.io import savemat
 
-from models.LFE_v2 import LFE
+from models.LFE_v3 import LFE
 from models.MultiHeadAttention import MultiHeadAttention
 from models.NoAttention import NoAttention
 from models.ResBlock import ResBlock
